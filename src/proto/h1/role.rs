@@ -58,7 +58,7 @@ macro_rules! maybe_panic {
             return Err(Parse::Internal)
         }
     })
-};;;;
+}
 
 pub(super) fn parse_headers<T>(
     bytes: &mut BytesMut,
