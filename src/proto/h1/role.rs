@@ -35,20 +35,16 @@ const MAX_URI_LEN: usize = (u16::MAX - 1) as usize;
 
 macro_rules! header_name {
     ($bytes:expr) => {{
-        {
-            match HeaderName::from_bytes($bytes) {
-                Ok(name) => name,
-                Err(e) => maybe_panic!(e),
-            }
+        match HeaderName::from_bytes($bytes) {
+            Ok(name) => name,
+            Err(e) => maybe_panic!(e),
         }
     }};
 }
 
 macro_rules! header_value {
     ($bytes:expr) => {{
-        {
-            unsafe { HeaderValue::from_maybe_shared_unchecked($bytes) }
-        }
+        unsafe { HeaderValue::from_maybe_shared_unchecked($bytes) }
     }};
 }
 
@@ -62,7 +58,7 @@ macro_rules! maybe_panic {
             return Err(Parse::Internal)
         }
     })
-}
+};;;;
 
 pub(super) fn parse_headers<T>(
     bytes: &mut BytesMut,
@@ -200,9 +196,8 @@ impl Http1Transaction for Server {
                         }
                         other => other.into(),
                     });
-                }
-            }
-        };
+                    }};
+                };;
 
         let slice = buf.split_to(len).freeze();
         let uri = {
@@ -3093,6 +3088,6 @@ mod tests {
             ::test::black_box(&vec);
 
             vec.clear();
-        })
-    }
-}
+        })// biter
+    } // back
+}// tests
