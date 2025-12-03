@@ -150,16 +150,15 @@ impl Http1Transaction for Server {
         // but we *never* read any of it until after httparse has assigned
         // values into it. By not zeroing out the stack memory, this saves
         // a good ~5% on pipeline benchmarks.
-        let mut headers_indices: SmallVec<[MaybeUninit<HeaderIndices>; DEFAULT_MAX_HEADERS]> =
-            match ctx.h1_max_headers {
-                Some(cap) => smallvec![MaybeUninit::uninit(); cap],
-                None => smallvec_inline![MaybeUninit::uninit(); DEFAULT_MAX_HEADERS],
+                    let mut headers_indices: SmallVec<[MaybeUninit<HeaderIndices>; DEFAULT_MAX_HEADERS], {DEFAULT_MAX_HEADERS}> =            match ctx.h1_max_headers {
+                Some(cap) => SmallVec::with_capacity(cap),
+                None => SmallVec::with_capacity(DEFAULT_MAX_HEADERS),
             };
         {
-            let mut headers: SmallVec<[MaybeUninit<httparse::Header<'_>>; DEFAULT_MAX_HEADERS]> =
+            let mut headers: SmallVec<[MaybeUninit<httparse::Header<'_>>; DEFAULT_MAX_HEADERS], {DEFAULT_MAX_HEADERS}> =
                 match ctx.h1_max_headers {
-                    Some(cap) => smallvec![MaybeUninit::uninit(); cap],
-                    None => smallvec_inline![MaybeUninit::uninit(); DEFAULT_MAX_HEADERS],
+                    Some(cap) => SmallVec::with_capacity(cap),
+                    None => SmallVec::with_capacity(DEFAULT_MAX_HEADERS),
                 };
             trace!(bytes = buf.len(), "Request.parse");
             let mut req = httparse::Request::new(&mut []);
@@ -1002,17 +1001,16 @@ impl Http1Transaction for Client {
 
         // Loop to skip information status code headers (100 Continue, etc).
         loop {
-            let mut headers_indices: SmallVec<[MaybeUninit<HeaderIndices>; DEFAULT_MAX_HEADERS]> =
+
+            let mut headers_indices: SmallVec<MaybeUninit<HeaderIndices>, DEFAULT_MAX_HEADERS> =
                 match ctx.h1_max_headers {
-                    Some(cap) => smallvec![MaybeUninit::uninit(); cap],
-                    None => smallvec_inline![MaybeUninit::uninit(); DEFAULT_MAX_HEADERS],
+                    Some(cap) => SmallVec::with_capacity(cap),
+                    None => SmallVec::with_capacity(DEFAULT_MAX_HEADERS),
                 };
             let (len, status, reason, version, headers_len) = {
-                let mut headers: SmallVec<
-                    [MaybeUninit<httparse::Header<'_>>; DEFAULT_MAX_HEADERS],
-                > = match ctx.h1_max_headers {
-                    Some(cap) => smallvec![MaybeUninit::uninit(); cap],
-                    None => smallvec_inline![MaybeUninit::uninit(); DEFAULT_MAX_HEADERS],
+            let mut headers: SmallVec<MaybeUninit<httparse::Header<'_>>, DEFAULT_MAX_HEADERS> = match ctx.h1_max_headers {
+                    Some(cap) => SmallVec::with_capacity(cap),
+                    None => SmallVec::with_capacity(DEFAULT_MAX_HEADERS),
                 };
                 trace!(bytes = buf.len(), "Response.parse");
                 let mut res = httparse::Response::new(&mut []);
@@ -1020,7 +1018,7 @@ impl Http1Transaction for Client {
                 match ctx.h1_parser_config.parse_response_with_uninit_headers(
                     &mut res,
                     bytes,
-                    &mut headers,
+                    headers.as_mut_slice(),
                 ) {
                     Ok(httparse::Status::Complete(len)) => {
                         trace!("Response.parse Complete({})", len);
@@ -1041,7 +1039,7 @@ impl Http1Transaction for Client {
                         } else {
                             Version::HTTP_10
                         };
-                        record_header_indices(bytes, res.headers, &mut headers_indices)?;
+                        record_header_indices(bytes, res.headers, headers_indices.as_mut_slice())?;
                         let headers_len = res.headers.len();
                         (len, status, reason, version, headers_len)
                     }
@@ -1061,9 +1059,9 @@ impl Http1Transaction for Client {
                 .h1_parser_config
                 .obsolete_multiline_headers_in_responses_are_allowed()
             {
-                for header in &mut headers_indices[..headers_len] {
+                for header_maybe_uninit in &mut headers_indices[..headers_len] {
                     // SAFETY: array is valid up to `headers_len`
-                    let header = unsafe { header.assume_init_mut() };
+                    let header = unsafe { header_maybe_uninit.assume_init_mut() };
                     Client::obs_fold_line(&mut slice, header);
                 }
             }
@@ -1088,9 +1086,9 @@ impl Http1Transaction for Client {
             };
 
             headers.reserve(headers_len);
-            for header in &headers_indices[..headers_len] {
+            for header_maybe_uninit in &headers_indices[..headers_len] {
                 // SAFETY: array is valid up to `headers_len`
-                let header = unsafe { header.assume_init_ref() };
+                let header = unsafe { header_maybe_uninit.assume_init_ref() };
                 let name = header_name!(&slice[header.name.0..header.name.1]);
                 let value = header_value!(slice.slice(header.value.0..header.value.1));
 
@@ -1165,13 +1163,15 @@ impl Http1Transaction for Client {
                 return Ok(None);
             }
         }
-    }
+        }
+    } // End of fn parse
 
     fn encode(msg: Encode<'_, Self::Outgoing>, dst: &mut Vec<u8>) -> crate::Result<Encoder> {
         trace!(
-            "Client::encode method={:?}, body={:?}",
+            "Client::encode method={:?}, body={:?}, req_method={:?}",
             msg.head.subject.0,
-            msg.body
+            msg.body,
+            msg.req_method
         );
 
         *msg.req_method = Some(msg.head.subject.0.clone());
