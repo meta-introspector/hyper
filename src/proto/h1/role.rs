@@ -1158,7 +1158,6 @@ impl Http1Transaction for Client {
                 return Ok(None);
             }
         }
-        }
     } // End of fn parse
 
     fn encode(msg: Encode<'_, Self::Outgoing>, dst: &mut Vec<u8>) -> crate::Result<Encoder> {
